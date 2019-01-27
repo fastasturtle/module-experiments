@@ -37,12 +37,15 @@ def remove_input_and_output(args: List[str], input_file: str, wd: str) -> str:
 
 class CDBToNinjaBuilder:
     def __init__(self):
+        self.compilers: Dict[str, str] = {} # dict of (exec name: var name)
         self.rules: Dict[str, Tuple[str, str]] = {}  # dict of (common_args: (rule_name, rule_text))
         self.edges: List[str] = []
 
     def add_cdb_command(self, command: str, input_file: str, wd: str):
         assert os.path.isabs(wd), 'Only absolute working dirs are supported!'
         args = shlex.split(command)
+        compiler_var_name = self.add_or_create_compiler(args[0])
+        args[0] = '${}'.format(compiler_var_name)
         output_file = make_absolute(find_output(args), wd)
         input_file = make_absolute(input_file, wd)
         common_args = remove_input_and_output(args, input_file, wd)
@@ -67,10 +70,19 @@ class CDBToNinjaBuilder:
 
     def get_text(self):
         return \
+            "\n".join(["{} = {}".format(name, exe) for exe, name in self.compilers.items()]) + \
+            "\n\n" + \
             "\n".join(rule_text for rule_name, rule_text in self.rules.values()) + \
             "\n\n" + \
             "\n".join(self.edges) + \
             "\n"
+
+    def add_or_create_compiler(self, compiler):
+        if compiler in self.compilers:
+            return self.compilers[compiler]
+        var_name = "compiler{}".format(len(self.compilers))
+        self.compilers[compiler] = var_name
+        return var_name
 
 
 def cdb_to_ninja(cdb) -> str:
