@@ -8,8 +8,8 @@ collect traces.
 1. Extract dependency forest from traces
     1. filter out non-preamble includes
     1. notify if it changes between invocations
-1. Extract self-times for each node in each graph
-    1. Also self-times for sources (require putting back traces in the driver)
+1. Extract self-times for each node in each dependency tree
+    1. Also don't forget self-times for sources (require putting back traces in the driver)
     1. notify if they diverge too much
     1. note: total-time = self-time + sum of includer's total-times
 1. Construct **Ninja_fake_modules** script, measure build time (**T_ninja_modules**):
