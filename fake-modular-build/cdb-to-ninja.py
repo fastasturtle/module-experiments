@@ -40,6 +40,7 @@ class CDBToNinjaBuilder:
         self.rules: Dict[str, Tuple[str, str]] = {}  # dict of (common_args: (rule_name, rule_text))
         self.edges: List[str] = []
         self.measuring_compilers_path = measuring_compilers_path
+        self.input_to_output: Dict[str, str] = {}
 
     def add_cdb_command(self, command: str, input_file: str, wd: str):
         assert os.path.isabs(wd), 'Only absolute working dirs are supported!'
@@ -47,6 +48,7 @@ class CDBToNinjaBuilder:
         compiler_var_name = self.add_or_create_compiler(args[0])
         args[0] = '${}'.format(compiler_var_name)
         output_file = make_absolute(find_output(args), wd)
+        self.input_to_output[input_file] = output_file
         time_file = output_file + ".time.json" if self.measuring_compilers_path is not None else None
         input_file = make_absolute(input_file, wd)
         common_args = remove_input_and_output(args, input_file, wd)
@@ -102,13 +104,17 @@ class CDBToNinjaBuilder:
             result[os.path.join(self.measuring_compilers_path, 'clang++' if looks_like_cpp else 'clang')] = var_name
         return result
 
+    def get_metadata(self) -> str:
+        return '\n'.join(
+            '"{}" "{}"'.format(input_path, output_path) for input_path, output_path in self.input_to_output.items())
 
-def cdb_to_ninja(cdb: Iterable[Mapping[str, str]], measuring_compiler_path: str) -> str:
+
+def cdb_to_ninja(cdb: Iterable[Mapping[str, str]], measuring_compiler_path: str) -> Tuple[str, str]:
     builder = CDBToNinjaBuilder(measuring_compiler_path)
     for entry in cdb:
         builder.add_cdb_command(entry['command'], entry['file'], entry['directory'])
 
-    return builder.get_text()
+    return builder.get_text(), builder.get_metadata()
 
 
 def main():
@@ -122,8 +128,7 @@ def main():
     args = parser.parse_args()
 
     cdb = json.load(open(args.cdb_path))
-    ninja = cdb_to_ninja(cdb, args.measuring_compiler_path)
-    metadata = None
+    ninja, metadata = cdb_to_ninja(cdb, args.measuring_compiler_path)
     open(args.output_path, 'w').write(ninja)
     if args.metadata_path:
         open(args.metadata_path, 'w').write(metadata)
