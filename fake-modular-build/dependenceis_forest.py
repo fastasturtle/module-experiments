@@ -2,7 +2,9 @@ import glob
 import json
 import os
 import pprint
+import statistics
 import sys
+from typing import *
 
 
 class Node:
@@ -179,22 +181,39 @@ def process_trace(trace_path):
     return tu_from_trace(trace, tu_name)
 
 
+class MeasuringResults:
+    def __init__(self, bad_files: Set[str], build_times: Mapping[str, int], immediate_deps: Mapping[str, Set[str]]):
+        self.bad_files = bad_files
+        self.build_times = build_times
+        self.immediate_deps = immediate_deps
+
+    def to_json(self):
+        return json.dumps({
+            'bad_files': list(self.bad_files),
+            'build_times': [{'path': p, 'time': t} for p, t in self.build_times.items()],
+            'immediate_deps': [{'path': p, 'deps': sorted(list(d))} for p, d in self.immediate_deps.items()]
+        }, indent=2)
+
+
+def median_build_times(tu_times: Mapping[str, List[int]]) -> Mapping[str, int]:
+    return {k: statistics.median(v) for k, v in tu_times.items()}
+
 
 def main():
+    all_bad_files = set()
     tu_times = {}
-    all_bad_names = set()
+    immediate_deps = {}
     for tp in glob.iglob(sys.argv[1] + '/**/*.o.time.json', recursive=True):
         print('Processing', tp)
-        tu, all_nodes, multi_entry_names = process_trace(tp)
-        all_bad_names = all_bad_names.union(multi_entry_names)
+        tu, all_nodes, bad_files = process_trace(tp)
+        all_bad_files.update(bad_files)
         for n in all_nodes.values():
             if n.name not in tu_times:
                 tu_times[n.name] = []
-            tu_times[n.name].append((n.self_time, tu.name))
-    file = open('results.txt', 'w')
-    pprint.pprint(all_bad_names, file)
-    pprint.pprint(tu_times, file)
-
+            tu_times[n.name].append(n.self_time)
+            immediate_deps[n.name] = set(c.name for c in n.children)
+    results = MeasuringResults(all_bad_files, median_build_times(tu_times), immediate_deps)
+    open('results.json', 'w').write(results.to_json())
 
 
 if __name__ == '__main__':
