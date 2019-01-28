@@ -1,5 +1,6 @@
 import json
 import os
+import pprint
 import sys
 
 
@@ -68,6 +69,33 @@ def find_multi_entry_names(events):
     return result
 
 
+def cleanup_events(events):
+    events = events[1:]  # first is TU itself - we don't have matching "exit" for it
+    events = [e for e in events if e['Type'] in ('enter', 'exit', 'skip')]  # for now we don't need other events
+    idxs_to_skip = set()
+    processing_stack = []
+    for idx, event in enumerate(events):
+        type = event['Type']
+        file = fix_path(event['File'])
+        if not file:
+            idxs_to_skip.add(idx)
+        elif type == 'enter' and file in processing_stack:
+            next_type = events[idx + 1]['Type']
+            next_file = fix_path(events[idx + 1]['File'])
+            if next_type == 'exit' and next_file == file:
+                idxs_to_skip.add(idx)
+                idxs_to_skip.add(idx + 1)
+            else:
+                raise RuntimeError('Weird self-include for', file)
+
+        if type == 'enter':
+            processing_stack.append(file)
+        elif type == 'exit':
+            assert processing_stack[-1] == file
+            processing_stack.pop()
+    return [e for idx, e in enumerate(events) if idx not in idxs_to_skip]
+
+
 def tu_from_trace(trace, tu_name):
     processing_stack = [tu_name]
 
@@ -75,11 +103,12 @@ def tu_from_trace(trace, tu_name):
     exit_times = {tu_name: trace['TotalTime']}
     total_time_in_children = {tu_name: 0}
     dependencies = {tu_name: set()}
-    multi_entry_names = find_multi_entry_names(trace['Events'])
+    events = cleanup_events(trace['Events'])
+    multi_entry_names = find_multi_entry_names(events)
     multi_entry_level = 0
     is_in_multi_entry_mode = False
 
-    for event in trace['Events'][1:]:  # first is TU itself - we don't have matching "exit" for it
+    for event in events:
         name = fix_path(event['File'])
         if not name:
             continue
@@ -94,6 +123,8 @@ def tu_from_trace(trace, tu_name):
         if is_in_multi_entry_mode:
             if node_type == 'enter':
                 multi_entry_level += 1
+                if name not in dependencies:
+                    multi_entry_names.add(name)
             elif node_type == 'exit':
                 multi_entry_level -= 1
 
@@ -128,16 +159,16 @@ def tu_from_trace(trace, tu_name):
             elif name not in exit_times:
                 print('Recursive include of {} in tu {}, ignoring'.format(name, tu_name))
             else:
-                dependencies[cur_name].add(name)
+                if not name in multi_entry_names:
+                    dependencies[cur_name].add(name)
 
     builder = NodeBuilder(dependencies, enter_times, exit_times, total_time_in_children, multi_entry_names)
     all_nodes = builder.build_all_nodes()
     tu = all_nodes[tu_name]
-    # print(tu.dump_tree())
     assert tu.total_time == exit_times[tu_name]
-    for k, v in all_nodes.items():
-        print(k, v.self_time)
-    assert tu.total_time == sum(c.self_time for c in all_nodes.values())
+    actual = tu.total_time
+    computed = sum(c.self_time for c in all_nodes.values())
+    assert actual == computed
     return tu
 
 
@@ -145,7 +176,6 @@ def process_trace(trace_path):
     trace = json.load(open(trace_path))
     tu_name = fix_path(trace['Events'][0]['File'])
     tu = tu_from_trace(trace, tu_name)
-    print(tu.dump_tree())
 
 
 def main():
