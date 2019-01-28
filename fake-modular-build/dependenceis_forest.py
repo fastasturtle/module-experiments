@@ -159,7 +159,7 @@ def tu_from_trace(trace, tu_name):
             elif name not in exit_times:
                 print('Recursive include of {} in tu {}, ignoring'.format(name, tu_name))
             else:
-                if not name in multi_entry_names:
+                if name not in multi_entry_names:
                     dependencies[cur_name].add(name)
 
     builder = NodeBuilder(dependencies, enter_times, exit_times, total_time_in_children, multi_entry_names)
