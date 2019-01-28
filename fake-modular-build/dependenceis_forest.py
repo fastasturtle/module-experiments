@@ -1,3 +1,4 @@
+import glob
 import json
 import os
 import pprint
@@ -169,18 +170,31 @@ def tu_from_trace(trace, tu_name):
     actual = tu.total_time
     computed = sum(c.self_time for c in all_nodes.values())
     assert actual == computed
-    return tu
+    return tu, all_nodes, multi_entry_names
 
 
 def process_trace(trace_path):
     trace = json.load(open(trace_path))
     tu_name = fix_path(trace['Events'][0]['File'])
-    tu = tu_from_trace(trace, tu_name)
+    return tu_from_trace(trace, tu_name)
+
 
 
 def main():
-    trace_path: str = sys.argv[1]
-    process_trace(trace_path)
+    tu_times = {}
+    all_bad_names = set()
+    for tp in glob.iglob(sys.argv[1] + '/**/*.o.time.json', recursive=True):
+        print('Processing', tp)
+        tu, all_nodes, multi_entry_names = process_trace(tp)
+        all_bad_names = all_bad_names.union(multi_entry_names)
+        for n in all_nodes.values():
+            if n.name not in tu_times:
+                tu_times[n.name] = []
+            tu_times[n.name].append((n.self_time, tu.name))
+    file = open('results.txt', 'w')
+    pprint.pprint(all_bad_names, file)
+    pprint.pprint(tu_times, file)
+
 
 
 if __name__ == '__main__':
