@@ -7,6 +7,7 @@ from typing import *
 
 MODULE_RULE = 'fake_module'
 OBJFILE_RULE = 'fake_objfile'
+MIN_TIME_TO_SPAWN_COMPILER = 0.015
 
 BUILD_EDGE_TEMPLATE = """
 build {output}: {rule_name} {input} {dependencies}
@@ -37,7 +38,8 @@ class NinjaBuilder:
             rule_name=rule_name,
             output=output,
             input=source_input, dependencies=implicit_deps_part,
-            wait_time=wait_time_us / 1000000., cat_times=5))
+            wait_time=(wait_time_us / 1000000.) + MIN_TIME_TO_SPAWN_COMPILER,
+            cat_times=5))
 
     def build(self):
         return RULES + '\n\n' + '\n\n'.join(self.edges) + '\n'
