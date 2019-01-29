@@ -1,9 +1,9 @@
 import glob
 import json
 import os
-import pprint
 import statistics
 import sys
+from MeasuringResults import MeasuringResults
 from typing import *
 
 
@@ -52,16 +52,20 @@ class NodeBuilder:
         return node
 
 
-def fix_path(path):
-    if not path: return path
-    return os.path.normpath(os.path.realpath(path))
+def fix_path(path, root_dir):
+    if not path:
+        return path
+    if not os.path.isabs(path):
+        path = os.path.join(root_dir, path)
+    res = os.path.normpath(os.path.realpath(path))
+    return res
 
 
-def find_multi_entry_names(events):
+def find_multi_entry_names(events, root_dir):
     processed = set()
     result = set()
     for event in events:
-        name = fix_path(event['File'])
+        name = fix_path(event['File'], root_dir)
         if not name:
             continue
         if event['Type'] == 'enter':
@@ -72,19 +76,19 @@ def find_multi_entry_names(events):
     return result
 
 
-def cleanup_events(events):
+def cleanup_events(events, root_dir):
     events = events[1:]  # first is TU itself - we don't have matching "exit" for it
     events = [e for e in events if e['Type'] in ('enter', 'exit', 'skip')]  # for now we don't need other events
     idxs_to_skip = set()
     processing_stack = []
     for idx, event in enumerate(events):
         type = event['Type']
-        file = fix_path(event['File'])
+        file = fix_path(event['File'], root_dir)
         if not file:
             idxs_to_skip.add(idx)
         elif type == 'enter' and file in processing_stack:
             next_type = events[idx + 1]['Type']
-            next_file = fix_path(events[idx + 1]['File'])
+            next_file = fix_path(events[idx + 1]['File'], root_dir)
             if next_type == 'exit' and next_file == file:
                 idxs_to_skip.add(idx)
                 idxs_to_skip.add(idx + 1)
@@ -99,20 +103,20 @@ def cleanup_events(events):
     return [e for idx, e in enumerate(events) if idx not in idxs_to_skip]
 
 
-def tu_from_trace(trace, tu_name):
+def tu_from_trace(trace, tu_name, root_dir):
     processing_stack = [tu_name]
 
     enter_times = {tu_name: 0}
     exit_times = {tu_name: trace['TotalTime']}
     total_time_in_children = {tu_name: 0}
     dependencies = {tu_name: set()}
-    events = cleanup_events(trace['Events'])
-    multi_entry_names = find_multi_entry_names(events)
+    events = cleanup_events(trace['Events'], root_dir)
+    multi_entry_names = find_multi_entry_names(events, root_dir)
     multi_entry_level = 0
     is_in_multi_entry_mode = False
 
     for event in events:
-        name = fix_path(event['File'])
+        name = fix_path(event['File'], root_dir)
         if not name:
             continue
 
@@ -175,46 +179,36 @@ def tu_from_trace(trace, tu_name):
     return tu, all_nodes, multi_entry_names
 
 
-def process_trace(trace_path):
+def process_trace(trace_path, root_dir):
     trace = json.load(open(trace_path))
-    tu_name = fix_path(trace['Events'][0]['File'])
-    return tu_from_trace(trace, tu_name)
-
-
-class MeasuringResults:
-    def __init__(self, bad_files: Set[str], build_times: Mapping[str, int], immediate_deps: Mapping[str, Set[str]]):
-        self.bad_files = bad_files
-        self.build_times = build_times
-        self.immediate_deps = immediate_deps
-
-    def to_json(self):
-        return json.dumps({
-            'bad_files': list(self.bad_files),
-            'build_times': [{'path': p, 'time': t} for p, t in self.build_times.items()],
-            'immediate_deps': [{'path': p, 'deps': sorted(list(d))} for p, d in self.immediate_deps.items()]
-        }, indent=2)
+    tu_name = fix_path(trace['Events'][0]['File'], root_dir)
+    return tu_from_trace(trace, tu_name, root_dir)
 
 
 def median_build_times(tu_times: Mapping[str, List[int]]) -> Mapping[str, int]:
-    return {k: statistics.median(v) for k, v in tu_times.items()}
+    return {k: int(statistics.median(v)) for k, v in tu_times.items()}
 
 
-def main():
+def main(json_list):
     all_bad_files = set()
     tu_times = {}
     immediate_deps = {}
-    for tp in glob.iglob(sys.argv[1] + '/**/*.o.time.json', recursive=True):
+    object_files = {}
+    root_dir = sys.argv[1]
+    for tp in json_list:
         print('Processing', tp)
-        tu, all_nodes, bad_files = process_trace(tp)
+        tu, all_nodes, bad_files = process_trace(tp, root_dir)
         all_bad_files.update(bad_files)
         for n in all_nodes.values():
             if n.name not in tu_times:
                 tu_times[n.name] = []
             tu_times[n.name].append(n.self_time)
             immediate_deps[n.name] = set(c.name for c in n.children)
-    results = MeasuringResults(all_bad_files, median_build_times(tu_times), immediate_deps)
+        object_files[tu.name] = tp.replace('.o.time.json', '.o')
+    results = MeasuringResults(all_bad_files, median_build_times(tu_times), immediate_deps, object_files)
     open('results.json', 'w').write(results.to_json())
 
 
 if __name__ == '__main__':
-    main()
+    main(glob.iglob(sys.argv[1] + '/**/*.o.time.json', recursive=True))
+    # main(['/home/dk/work/llvm-project/build-release/lib/IR/CMakeFiles/LLVMCore.dir/Attributes.cpp.o.time.json'])

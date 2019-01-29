@@ -5,6 +5,8 @@ import shlex
 import os
 from typing import *
 
+from util import make_absolute
+
 
 def find_output(args: List[str]) -> str:
     if args:
@@ -12,10 +14,6 @@ def find_output(args: List[str]) -> str:
             if a1 == '-o':
                 return a2
     raise RuntimeError("Can\'t find output in {0}".format(str(args)))
-
-
-def make_absolute(path: str, wd: str) -> str:
-    return os.path.normpath(os.path.join(wd, path))
 
 
 def remove_input_and_output(args: List[str], input_file: str, wd: str) -> str:

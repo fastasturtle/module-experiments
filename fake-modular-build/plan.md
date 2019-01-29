@@ -37,3 +37,14 @@ across different TUs) (pro-modules)
 - It's not clear what the average "Loading BMI" time would be (cons-modules)
 - Real-world modular projects might be structured differently
 - It's not clear for me at what point codegen and optimiztions would happen, and whether **D_obj_only** is accurate
+
+
+---
+
+TODO:
+- MS to US where needed
+- pass parameters to createFakeBuild
+- take .o-s and jsons from metadata
+- create an umbrella script
+- speedup or parallelize deps forest
+- make sure only absolute paths are traced
