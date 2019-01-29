@@ -42,9 +42,11 @@ across different TUs) (pro-modules)
 ---
 
 TODO:
-- MS to US where needed
-- pass parameters to createFakeBuild
-- take .o-s and jsons from metadata
-- create an umbrella script
-- speedup or parallelize deps forest
-- make sure only absolute paths are traced
+[ ] MS to US where needed
+[+] pass parameters to createFakeBuild
+[+] take .o-s and jsons from metadata
+[+] create an umbrella script
+[ ] speedup or parallelize deps forest
+[ ] Remove "processing" traces from deps forest 
+[+] make sure only absolute paths are traced
+[ ] Explicitely pass json file location (to make sure we can work with syntax-only)

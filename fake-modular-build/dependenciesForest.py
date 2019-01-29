@@ -189,7 +189,7 @@ def median_build_times(tu_times: Mapping[str, List[int]]) -> Mapping[str, int]:
     return {k: int(statistics.median(v)) for k, v in tu_times.items()}
 
 
-def main(json_list):
+def collect_results(json_list):
     all_bad_files = set()
     tu_times = {}
     immediate_deps = {}
@@ -205,10 +205,9 @@ def main(json_list):
             tu_times[n.name].append(n.self_time)
             immediate_deps[n.name] = set(c.name for c in n.children)
         object_files[tu.name] = tp.replace('.o.time.json', '.o')
-    results = MeasuringResults(all_bad_files, median_build_times(tu_times), immediate_deps, object_files)
-    open('results.json', 'w').write(results.to_json())
+    return MeasuringResults(all_bad_files, median_build_times(tu_times), immediate_deps, object_files)
 
 
 if __name__ == '__main__':
-    main(glob.iglob(sys.argv[1] + '/**/*.o.time.json', recursive=True))
-    # main(['/home/dk/work/llvm-project/build-release/lib/IR/CMakeFiles/LLVMCore.dir/Attributes.cpp.o.time.json'])
+    results = collect_results(glob.iglob(sys.argv[1] + '/**/*.o.time.json', recursive=True))
+    open('results.json', 'w').write(results.to_json())

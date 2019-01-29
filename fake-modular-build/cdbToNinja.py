@@ -102,12 +102,11 @@ class CDBToNinjaBuilder:
             result[os.path.join(self.measuring_compilers_path, 'clang++' if looks_like_cpp else 'clang')] = var_name
         return result
 
-    def get_metadata(self) -> str:
-        return '\n'.join(
-            '"{}" "{}"'.format(input_path, output_path) for input_path, output_path in self.input_to_output.items())
+    def get_metadata(self) -> List[Tuple[str, str]]:
+        return [(input_path, output_path) for input_path, output_path in self.input_to_output.items()]
 
 
-def cdb_to_ninja(cdb: Iterable[Mapping[str, str]], measuring_compiler_path: str) -> Tuple[str, str]:
+def cdb_to_ninja(cdb: Iterable[Mapping[str, str]], measuring_compiler_path: str) -> Tuple[str, List[Tuple[str, str]]]:
     builder = CDBToNinjaBuilder(measuring_compiler_path)
     for entry in cdb:
         builder.add_cdb_command(entry['command'], entry['file'], entry['directory'])
@@ -129,7 +128,7 @@ def main():
     ninja, metadata = cdb_to_ninja(cdb, args.measuring_compiler_path)
     open(args.output_path, 'w').write(ninja)
     if args.metadata_path:
-        open(args.metadata_path, 'w').write(metadata)
+        open(args.metadata_path, 'w').write('\n'.join('"{}" "{}"'.format(ip, op) for ip, op in metadata))
 
 
 if __name__ == '__main__':
