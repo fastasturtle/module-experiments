@@ -42,7 +42,7 @@ class CDBToNinjaBuilder:
 
     def add_cdb_command(self, command: str, input_file: str, wd: str):
         assert os.path.isabs(wd), 'Only absolute working dirs are supported!'
-        args = shlex.split(command)
+        args = [shlex.quote(s) for s in shlex.split(command)]
         compiler_var_name = self.add_or_create_compiler(args[0])
         args[0] = '${}'.format(compiler_var_name)
         output_file = make_absolute(find_output(args), wd)
