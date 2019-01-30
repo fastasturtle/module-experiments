@@ -81,25 +81,30 @@ def cleanup_events(events, root_dir):
     events = [e for e in events if e['Type'] in ('enter', 'exit', 'skip')]  # for now we don't need other events
     idxs_to_skip = set()
     processing_stack = []
+    is_skipping = False
+    skipping_level = 0
     for idx, event in enumerate(events):
         type = event['Type']
         file = fix_path(event['File'], root_dir)
-        if not file:
+
+        if type == 'enter' and file and file in processing_stack:
+            is_skipping = True
+
+        if is_skipping or not file:
             idxs_to_skip.add(idx)
-        elif type == 'enter' and file in processing_stack:
-            next_type = events[idx + 1]['Type']
-            next_file = fix_path(events[idx + 1]['File'], root_dir)
-            if next_type == 'exit' and next_file == file:
-                idxs_to_skip.add(idx)
-                idxs_to_skip.add(idx + 1)
-            else:
-                raise RuntimeError('Weird self-include for', file)
 
         if type == 'enter':
             processing_stack.append(file)
+            if is_skipping:
+                skipping_level += 1
+                print('Skipping', file)
         elif type == 'exit':
             assert processing_stack[-1] == file
             processing_stack.pop()
+            if is_skipping:
+                skipping_level -= 1
+                if skipping_level == 0:
+                    is_skipping = False
     return [e for idx, e in enumerate(events) if idx not in idxs_to_skip]
 
 
