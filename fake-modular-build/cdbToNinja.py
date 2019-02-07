@@ -45,18 +45,20 @@ class CDBToNinjaBuilder:
         args = [shlex.quote(s) for s in shlex.split(command)]
         compiler_var_name = self.add_or_create_compiler(args[0])
         args[0] = '${}'.format(compiler_var_name)
-        output_file = make_absolute(find_output(args), wd)
+        rel_output = find_output(args)
+        output_file = make_absolute(rel_output, wd)
         self.input_to_output[input_file] = output_file
-        time_file = output_file + ".time.json" if self.measuring_compilers_path is not None else None
+        time_file = rel_output + '.time.json' if self.measuring_compilers_path is not None else None
         input_file = make_absolute(input_file, wd)
         common_args = remove_input_and_output(args, input_file, wd)
         self.add_build_edge(common_args, input_file, output_file, time_file, wd)
 
-    def add_build_edge(self, common_args: str, input_file: str, output_file: str, implicit_output_file: Optional[str],
+    def add_build_edge(self, common_args: str, input_file: str, output_file: str, time_file: Optional[str],
                        working_dir: str):
         rule_name = self.find_or_add_rule(common_args, working_dir)
-        implicit_output_file_part = ' | {}'.format(implicit_output_file) if implicit_output_file else ''
-        self.edges.append("build {}{}: {} {}".format(output_file, implicit_output_file_part, rule_name, input_file))
+        self.edges.append(f"build {output_file}{time_file}: {rule_name} {input_file}\n" +
+                          f"   obj_file={output_file}\n" +
+                          f"   time_trace_file={time_file}\n")
 
     def find_or_add_rule(self, common_args: str, working_dir: str) -> str:
         key = common_args + working_dir
@@ -66,8 +68,9 @@ class CDBToNinjaBuilder:
             return existing_rule[0]
 
         rule_name = 'cc{}'.format(len(self.rules))
-        rule_text = "rule {}\n".format(rule_name) + \
-                    "   command = cd {} && {} -o $out $in".format(working_dir, common_args)
+        rule_text = f"rule {rule_name}\n" + \
+                    f"   command = cd {working_dir} && {common_args} --time-trace $time_trace_file -o $obj_file $in"
+
         self.rules[key] = (rule_name, rule_text)
         return rule_name
 

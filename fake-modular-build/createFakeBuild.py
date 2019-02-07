@@ -17,7 +17,7 @@ build {output}: {rule_name} {input} {dependencies}
 
 RULES = """
 rule {module_rule}
-    command = sleep $wait_time && truncate -s 0 $out && seq 1 $cat_times | xargs -Inone cat $in >> $out
+    command = sleep $wait_time && truncate -s 0 $out && seq 1 $cat_times | xargs -I@@@ cat $in >> $out
 
 rule {objfile_rule}
     command = sleep $wait_time && touch $out
